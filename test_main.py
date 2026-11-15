@@ -7,3 +7,10 @@ def test_health():
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+def test_case_requires_error():
+    client = TestClient(app)
+    response = client.post("/cases", json={"title": "接口连不上"})
+
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["loc"] == ["body", "error"]
