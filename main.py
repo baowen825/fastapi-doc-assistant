@@ -1,7 +1,12 @@
+import os
+from dotenv import load_dotenv
+from openai import OpenAI, APITimeoutError
+
 import sqlite3
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
+load_dotenv()
 app = FastAPI()
 
 @app.get("/health")
@@ -44,3 +49,33 @@ def get_case(case_id: int):
         raise HTTPException(status_code=404, detail="排障记录不存在")
 
     return {"id": record[0], "title": record[1], "error": record[2]}
+
+class QuestionInput(BaseModel):
+    question: str
+
+
+@app.post("/ask")
+def ask_question(data: QuestionInput):
+    try:
+        with OpenAI(
+            api_key=os.getenv("DEEPSEEK_API_KEY"),
+            base_url="https://api.deepseek.com",
+            timeout=30.0,
+            max_retries=0,
+        ) as client:
+            response = client.chat.completions.create(
+                model="deepseek-flash",
+                messages=[
+                    {"role": "user", "content": data.question}
+                ],
+                max_tokens=500,
+                extra_body={"thinking": {"type": "disabled"}},
+            )
+
+        return {"answer": response.choices[0].message.content}
+
+    except APITimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="模型响应超时，请稍后重试",
+        )
